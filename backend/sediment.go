@@ -205,17 +205,24 @@ func getSedimentEval(c *gin.Context) {
 	})
 }
 
-// evalPackageSystemPrompt 四维评测员 system prompt
-const evalPackageSystemPrompt = `你是 Skill 包质量评测员。平台要求每个上传的 Skill 包通过四维评测才能进入市场。
+// evalPackageSystemPrompt 四维评测员 system prompt（对齐 Anthropic 官方 Agent Skill 规范）
+const evalPackageSystemPrompt = `你是 Skill 包质量评测员。平台遵循 Anthropic 官方 Agent Skill 规范，每个上传的 Skill 包必须通过四维评测才能进入市场。
 评测依据只有两样：用户的 name/description 声明 + 包内真实文件内容快照。要实事求是，有就是有，没有就是没有，禁止脑补。
+
+Anthropic 官方规范要点（评测必须对照执行）：
+- SKILL.md 顶部必须有 YAML frontmatter（--- 包裹），必填 name 与 description。
+- name：kebab-case（小写字母、数字、连字符），≤64 字符，与包内文件夹名一致，禁止空格/大写/下划线，禁止泛化名（如 skill、helper）。
+- description：第三人称（禁止「I can…/You can use…」），≤1024 字符，说明「做什么 + 何时用（Use this skill when…，可列具体触发场景）」，禁止包含保留词 anthropic/claude。description 是触发检索的唯一依据。
+- body 用命令式（Create/Use/Prefer），≤500 行，说明每一步的 why；长文档拆到 references/（渐进披露，引用只允许一层）。
+- 包内目录：SKILL.md 必在；references/（按需加载的文档）、scripts/（可执行代码）、assets/（模板素材）为可选标准目录。
 
 严格只输出 JSON，不要 markdown 代码块，不要任何多余文字。格式：
 {"dimensions":[{"key":"searchable|complete|format|boundary","score":0.0,"verdict":"pass|fail","issues":["具体问题，必须引用文件名或字段名"],"suggestion":"具体怎么改"}],"summary":"一句话总评"}
 
 四维判分标准：
-1. searchable 可检索性：name 独特清晰、无错别字；description 说明「帮谁解决什么问题、产出什么」；tags 覆盖用户会搜索的词（≥3 个）。score≥0.6 且无致命问题才 pass。
+1. searchable 可检索性：name 为合法 kebab-case 且不泛化；description 为第三人称、说明「帮谁解决什么问题、产出什么、何时触发」、覆盖用户会搜的关键词；tags 覆盖检索词（≥3 个）。frontmatter 缺失或 description 触发不清判 fail。
 2. complete 文件完备性：SKILL.md 必须存在；SKILL.md 里提到的文件（references/scripts/gotchas/evals 等目录或具体文件名）必须在包内真实存在；不允许空文件、0 字节占位、坏链接。
-3. format 格式完整性：SKILL.md 必须包含五锚点区块「核心步骤 / 完成标准 / 关键判断 / 失败案例 / 适用边界」（以 ## 标题出现）；包内 JSON 文件必须可解析；内容不允许截断、乱码、残缺。
+3. format 格式完整性：SKILL.md 必须有合法 YAML frontmatter（name+description）；body 含五锚点区块「核心步骤 / 完成标准 / 关键判断 / 失败案例 / 适用边界」（以 ## 标题出现）；包内 JSON 文件必须可解析；内容不允许截断、乱码、残缺。
 4. boundary 边界控制（硬门槛）：必须明确写出「不适用条件」（什么情况这套方法不能用）与「交回给人」触发点（出现什么信号必须人工介入或停机）。这两条缺失或含糊一律 fail，无论其他维度多好。
 overall 规则：边界 fail 则整体 fail，其余维度各自独立判分。`
 
@@ -408,12 +415,13 @@ func sedimentChatResp(reply string, progress int, extracted interface{}, degrade
 	return gin.H{"reply": reply, "progress": progress, "extracted": extracted, "degraded": degraded}
 }
 
-// sedimentCoachSystemPrompt 访谈教练：引导复盘「做成的一件事」，逐题追问，收集 backfill 所需的全部素材
-const sedimentCoachSystemPrompt = `你是 WowSkillLand 平台的「沉淀访谈教练」。用户是过来人——TA 亲手做成过某件事（保研上岸、拿竞赛奖、论文写好、带过项目……），现在来平台复盘这段经历，把它变成一张可复用的 Skill 卡，帮后来人少踩坑。
+// sedimentCoachSystemPrompt 访谈教练：引导复盘「做成的一件事」，逐题追问，按 Anthropic 官方 Agent Skill 规范收集素材
+const sedimentCoachSystemPrompt = `你是 WowSkillLand 平台的「沉淀访谈教练」。用户是过来人——TA 亲手做成过某件事（保研上岸、拿竞赛奖、论文写好、带过项目……），现在来平台复盘这段经历，把它变成一张符合 Anthropic 官方 Agent Skill 规范的可复用 Skill 卡，帮后来人少踩坑。
 
 你的任务：像朋友一样，用简体中文逐题引导 TA 把这段经历讲清楚。不要教 TA 怎么做这件事，只让 TA 讲当时自己是怎么做的、踩过什么坑、沉淀了什么方法。
 
 【要收集的信息（按顺序引导，一次只问 1-2 个问题，绝不一次性全抛）】
+0. Skill 命名与描述（Anthropic 规范，全程边收边沉淀）：目标 Skill 名用 kebab-case（小写+连字符，如 follow-up-lab-email）；描述必须第三人称、说清「帮谁解决什么问题、产出什么、何时触发」（Use this skill when…）。听到 TA 讲清这两点后再进入下面收集。
 1. 是什么事 + 最后做成什么样：复述 TA 的原话确认任务（一句概括），并问清最终的产物/结果是什么。
 2. 关键判断（最值钱，至少 2 条）：做这件事的岔路口 TA 是怎么决策的——「出现什么信号 → 做了什么判断 → 在什么场景成立」。主动追问四种岔路口：在哪一步停下来回头验证 / 什么情况下要求补充信息而不是直接动手 / 哪一步必须查、必须跑 / 什么现象一出现就知道这条路走不通。
 3. 失败案例：踩过的坑、做错的事、后果是什么。
@@ -568,8 +576,12 @@ func evidenceIn(transcript, field string) bool {
 	return overlapScore(keyTerms(transcript), keyTerms(field)) >= 0.6
 }
 
-// extractBackfillSystemPrompt 访谈收尾的结构化提取器
-const extractBackfillSystemPrompt = `你是经验沉淀的结构化抽取器。把用户复盘对话整理成补录请求。只抽取对话里明确说到的内容，没说的留空，禁止脑补。
+// extractBackfillSystemPrompt 访谈收尾的结构化提取器（对齐 Anthropic 官方 Agent Skill 规范）
+const extractBackfillSystemPrompt = `你是经验沉淀的结构化抽取器。把用户复盘对话整理成补录请求，产出要符合 Anthropic 官方 Agent Skill 规范。只抽取对话里明确说到的内容，没说的留空，禁止脑补。
+
+命名与描述规范（Anthropic 官方）：
+- skill_name：kebab-case（小写字母、数字、连字符），≤64 字符，如 follow-up-lab-email；对话里没有合适名字就根据任务内容拟一个，禁止泛化名（skill、helper）。
+- skill_description：第三人称（禁止 I can…/You can use…），一句话说清「帮谁解决什么问题、产出什么、何时触发」，≤1024 字符；没有依据就留空。
 
 任务类型从下面选（输出键名，选最接近的一次性可交付任务）：
 thesis_topic 论文选题打磨与收敛
@@ -585,7 +597,7 @@ when_to_check（在哪一步停下回头验证）/ when_to_probe（什么情况�
 trigger_signal 是触发信号（出现什么现象），judgment 是当时做的判断/做法，scope 是适用场景。只放对话里明确有依据的判断，最多 4 条。
 
 严格只输出 JSON，不要 markdown 代码块：
-{"task_intent":"","task_title":"","before":"","after":"","decisions":[{"slot":"","trigger_signal":"","judgment":"","scope":""}]}`
+{"task_intent":"","task_title":"","skill_name":"","skill_description":"","before":"","after":"","decisions":[{"slot":"","trigger_signal":"","judgment":"","scope":""}]}`
 
 // extractBackfill 调 LLM 提取补录结构；解析失败走 repairClosingJSON 容错，仍失败返回 error
 func extractBackfill(transcript string) (*backfillReq, error) {

@@ -388,11 +388,13 @@ func extractFromTrace(exec *Execution) (*extractResult, error) {
 
 // backfillReq 轨迹补录请求体（沉淀多轮访谈收尾时复用同一结构）
 type backfillReq struct {
-	TaskIntent string            `json:"task_intent"`
-	TaskTitle  string            `json:"task_title"`
-	Before     string            `json:"before"` // 做之前的产物
-	After      string            `json:"after"`  // 做之后的产物
-	Decisions  []backfillDecision `json:"decisions"`
+	TaskIntent       string             `json:"task_intent"`
+	TaskTitle        string             `json:"task_title"`
+	SkillName        string             `json:"skill_name"`        // Anthropic 规范：kebab-case 命名
+	SkillDescription string             `json:"skill_description"` // Anthropic 规范：第三人称触发式描述
+	Before           string             `json:"before"`            // 做之前的产物
+	After            string             `json:"after"`             // 做之后的产物
+	Decisions        []backfillDecision `json:"decisions"`
 }
 
 // backfillDecision 一条补录关键判断（来源步号：用户自述的阶段序号）
@@ -459,13 +461,17 @@ func runBackfill(c *gin.Context, uid int64, body backfillReq) {
 	insertStep(execID, 1, StepAIAction, "补录：做之后", "", "", "", nil, "", body.After, 0)
 
 	// 建 Skill 与版本，proof_type 标为补录
-	name := strings.TrimSpace(body.TaskTitle)
+	name := strings.TrimSpace(body.SkillName)
+	if name == "" {
+		name = strings.TrimSpace(body.TaskTitle)
+	}
 	if name == "" {
 		name = AllowedIntents[body.TaskIntent]
 	}
+	desc := strings.TrimSpace(body.SkillDescription)
 	skillRes, err := db.Exec(`INSERT INTO skills (owner_id, name, description, category, tags, version,
-		status, task_intent, origin, maintainer_id) VALUES (?, ?, '', ?, '[]', '1.0', ?, ?, ?, ?)`,
-		uid, name, AllowedIntents[body.TaskIntent], SkillStatusDraft, body.TaskIntent, OriginRouteTwo, uid)
+		status, task_intent, origin, maintainer_id) VALUES (?, ?, ?, ?, '[]', '1.0', ?, ?, ?, ?)`,
+		uid, name, desc, AllowedIntents[body.TaskIntent], SkillStatusDraft, body.TaskIntent, OriginRouteTwo, uid)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
