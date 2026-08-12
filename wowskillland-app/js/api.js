@@ -424,6 +424,43 @@ function localExtractSlots(transcript, note) {
   }, 700);
 }
 
+/* 沉淀通道 A 的本地兜底教练：后端/LLM 不可用时，用关键词推进访谈，保证界面可演示。 */
+function localSedimentChat(messages) {
+  var userMsgs = (messages || []).filter(function (m) { return m.role === 'user'; });
+  var text = userMsgs.map(function (m) { return m.content || ''; }).join('\n');
+  var progress = Math.min(15 + userMsgs.length * 15, 90);
+  var extracted = { task_title: '', before: '', after: '', decisions: [] };
+  var reply;
+  if (!/做|搞定|完成|成功|拿到|上岸|获奖|录用|写完了|通过了|跑通/.test(text)) {
+    reply = '先跟我讲讲你亲手做成过的那件事吧——什么事？最后做成了什么样？（当前是离线兜底，接入 DeepSeek 后我会逐题引导追问）';
+  } else if (!/差点|放弃|卡住|踩坑|困难|坑|纠结/.test(text)) {
+    reply = '很好。做到最关键的那一步时，有没有让你差点放弃/卡住的地方？你当时是怎么判断「要不要继续」的？';
+  } else if (userMsgs.length < 3) {
+    reply = '记下了。再补两点：① 这套方法适合什么样的人（触发处境）？② 什么情况它不适用、该交回给人判断？';
+  } else {
+    reply = '素材够了。点「完成沉淀」，我会把你说的整理成草稿（离线兜底只能粗略抽取；接入 DeepSeek 后每个判断都能逐字溯源）。';
+    progress = 90;
+  }
+  return { reply: reply, progress: progress, extracted: extracted, degraded: true };
+}
+
+/* 把后端草稿全貌（respondDraftWithStats / runBackfill）归一化成前端 slot 列表，与 extractSlots 同构。 */
+function mapDraftResp(r, tag) {
+  var slots = (r.slots || []).map(function (s) {
+    var d = (s.decisions && s.decisions[0]) || null;
+    return {
+      key: s.slot,
+      title: s.prompt || s.slot,
+      content: d ? (d.trigger_signal + ' → ' + d.judgment + '（' + d.scope + '）') : '',
+      source: '口述补录'
+    };
+  }).filter(function (s) { return s.content; });
+  return {
+    slots: slots, missing: r.missing || [], versionId: r.version_id, skillId: r.skill_id,
+    live: true, note: (r.message || r.still_missing || '') + (tag ? ' · ' + tag : '')
+  };
+}
+
 /* 后端 skill（含 /growth/wow/discuss 返回的意图识别卡片）→ 前端 DB.skills['be-'+id] 的统一映射。
  * listSkills / getSkill / discuss 共用，避免三处各自写一遍。 */
 function mapBackendSkill(s) {
@@ -698,6 +735,90 @@ var WowAPI = {
       }).catch(function () { return localExtractSlots(transcript); });
     }
     return localExtractSlots(transcript);
+  },
+
+  /* ----------------------------------------------------------
+   * 3b. 沉淀 · 双通道
+   *    通道 A 多轮口述：sedimentChat（无状态多轮，前端带完整历史）
+   *       POST /growth/sediment/chat {messages} → {reply,progress,extracted,degraded}
+   *     收尾：sedimentFinish（LLM 提取 backfillReq + 无来源即丢弃）
+   *       POST /growth/sediment/finish {messages} → 草稿全貌（同 extractSlots）
+   *    通道 B 上传 skill 包：sedimentUpload（multipart，每次上传跑 LLM 四维评测）
+   *       POST /growth/sediment/upload → {skill_id,version_id,status,
+   *         eval:{dimensions:[{key,score,verdict,issues,suggestion}],
+   *               summary,overall_verdict,overall_score,degraded,labels,hard_gate}}
+   *     历史评测：GET /growth/sediment/evals/:skillID
+   * ---------------------------------------------------------- */
+  sedimentChat: function (messages) {
+    if (!WowConfig.USE_MOCK) {
+      return ensureLogin().then(function () {
+        return wowPost('/growth/sediment/chat', { messages: messages });
+      }).catch(function (err) {
+        if (err && err.needLogin) throw err;
+        return localSedimentChat(messages);
+      });
+    }
+    return mockDelay(localSedimentChat(messages), 700);
+  },
+  sedimentFinish: function (messages) {
+    if (!WowConfig.USE_MOCK) {
+      return ensureLogin().then(function () {
+        return wowPost('/growth/sediment/finish', { messages: messages });
+      }).then(function (r) {
+        return mapDraftResp(r, '口述沉淀');
+      }).catch(function (err) {
+        if (err && err.needLogin) throw err;
+        throw err;
+      });
+    }
+    var msgs = (messages || []).filter(function (m) { return m.role === 'user'; });
+    return mockDelay(mapDraftResp({
+      slots: localExtractSlots(msgs.map(function (m) { return m.content; }).join('\n')).slots,
+      missing: [], version_id: 'm-sed-1', skill_id: 0,
+      still_missing: '口述已入池（mock）'
+    }, '口述沉淀'), 900);
+  },
+  sedimentUpload: function (formData) {
+    if (!WowConfig.USE_MOCK) {
+      return ensureLogin().then(function () {
+        var opt = { method: 'POST', body: formData };
+        if (WowConfig.TOKEN) opt.headers = { 'Authorization': 'Bearer ' + WowConfig.TOKEN };
+        return fetch(WowConfig.API_BASE + '/growth/sediment/upload', opt).then(function (r) {
+          if (r.status === 401) {
+            setAuth('', null);
+            var expired = new Error('登录已过期，请重新登录');
+            expired.needLogin = true;
+            throw expired;
+          }
+          return r.json().then(function (j) {
+            if (!r.ok) throw new Error(j.error || ('上传失败 ' + r.status));
+            return j;
+          }, function () { throw new Error('上传失败 ' + r.status); });
+        });
+      });
+    }
+    return mockDelay({
+      skill_id: 0, version_id: 'm-up-1', status: 'gated',
+      eval: {
+        dimensions: [
+          { key: 'searchable', score: 0.8, verdict: 'pass', issues: [], suggestion: '无' },
+          { key: 'complete', score: 0.8, verdict: 'pass', issues: [], suggestion: '无' },
+          { key: 'format', score: 0.8, verdict: 'pass', issues: [], suggestion: '无' },
+          { key: 'boundary', score: 0.2, verdict: 'fail', issues: ['SKILL.md 里没有「不适用条件」段落'], suggestion: '补上：什么情况这套方法不能用，出现什么信号必须交回给人。' }
+        ],
+        summary: '包结构完整但缺少边界声明（mock 评测）',
+        overall_verdict: 'fail', overall_score: 0.65, degraded: false,
+        labels: ['可检索性', '文件完备性', '格式完整性', '边界控制'],
+        hard_gate: 'boundary'
+      }
+    }, 900);
+  },
+  getSedimentEval: function (skillId) {
+    if (!WowConfig.USE_MOCK) {
+      if (!skillId) return Promise.resolve(null);
+      return wowGet('/growth/sediment/evals/' + skillId).catch(function () { return null; });
+    }
+    return mockDelay(null, 300);
   },
 
   /* ----------------------------------------------------------

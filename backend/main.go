@@ -14,6 +14,7 @@ func main() {
 	initNotificationsSchema()
 	initEvalSchema()
 	initCrossroadSchema()
+	initSedimentSchema()
 
 	r := gin.Default()
 
@@ -144,6 +145,12 @@ func main() {
 
 		// F5.3b 轨迹补录：承认用户会在平台外做事，但蒸馏度封顶 0.85
 		growth.POST("/backfill", authMiddleware(), backfillExecution)
+
+		// 沉淀双通道（v1.3）：AI 访谈多轮口述 + 上传 Skill 包（每次 LLM 四维评测）
+		growth.POST("/sediment/chat", authMiddleware(), sedimentChat)
+		growth.POST("/sediment/finish", authMiddleware(), sedimentFinish)
+		growth.POST("/sediment/upload", authMiddleware(), sedimentUpload)
+		growth.GET("/sediment/evals/:skillID", authMiddleware(), getSedimentEval)
 
 		// F17 编排态：长周期方向性需求。只承诺编排，不承诺结果。
 		// probe 与 interview 单独命名，避免与 /orchestrations/:id 在同级产生静态段与参数段冲突

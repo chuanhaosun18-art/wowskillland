@@ -386,6 +386,24 @@ func extractFromTrace(exec *Execution) (*extractResult, error) {
 
 // ---------- F5.3b 轨迹补录（v1.2 新增） ----------
 
+// backfillReq 轨迹补录请求体（沉淀多轮访谈收尾时复用同一结构）
+type backfillReq struct {
+	TaskIntent string            `json:"task_intent"`
+	TaskTitle  string            `json:"task_title"`
+	Before     string            `json:"before"` // 做之前的产物
+	After      string            `json:"after"`  // 做之后的产物
+	Decisions  []backfillDecision `json:"decisions"`
+}
+
+// backfillDecision 一条补录关键判断（来源步号：用户自述的阶段序号）
+type backfillDecision struct {
+	Slot          string `json:"slot"`
+	TriggerSignal string `json:"trigger_signal"`
+	Judgment      string `json:"judgment"`
+	Scope         string `json:"scope"`
+	StageIndex    int    `json:"stage_index"`
+}
+
 // backfillExecution POST /api/growth/backfill
 //
 // 承认一件事：用户会在平台外做事。改简历用 Word、改选题在纸上跟导师聊，工具习惯很强。
@@ -393,23 +411,17 @@ func extractFromTrace(exec *Execution) (*extractResult, error) {
 // 所以给降级路径，但不给平权——蒸馏度封顶 0.85，想拿满分就进工作台。
 func backfillExecution(c *gin.Context) {
 	uid := c.GetInt64("userID")
-	var body struct {
-		TaskIntent string `json:"task_intent"`
-		TaskTitle  string `json:"task_title"`
-		Before     string `json:"before"` // 做之前的产物
-		After      string `json:"after"`  // 做之后的产物
-		Decisions  []struct {
-			Slot          string `json:"slot"`
-			TriggerSignal string `json:"trigger_signal"`
-			Judgment      string `json:"judgment"`
-			Scope         string `json:"scope"`
-			StageIndex    int    `json:"stage_index"` // 用户自述的阶段序号
-		} `json:"decisions"`
-	}
+	var body backfillReq
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
 		return
 	}
+	runBackfill(c, uid, body)
+}
+
+// runBackfill 补录落库主体：建 execution + 占位轨迹 + draft skill + 版本 + 判断。
+// 沉淀多轮访谈收尾（sedimentFinish）复用同一逻辑，保证两条通道产物同构。
+func runBackfill(c *gin.Context, uid int64, body backfillReq) {
 	if !isProductive(body.TaskIntent) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "这类任务不产出方法，不需要补录"})
 		return

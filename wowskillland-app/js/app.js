@@ -1463,78 +1463,250 @@ function viewJunction(id) {
 }
 
 /* ============================================================
- * 视图：发布端（学长录入）
+ * 视图：发布端（学长录入）· 双通道沉淀
+ *   通道 A 多轮访谈：AI 问、你说 → sedimentChat 逐轮推进，
+ *           收尾 sedimentFinish 提取四槽 backfill，无来源即丢弃
+ *   通道 B 上传 Skill 包：sedimentUpload，每次上传跑 LLM 四维评测
+ *           （可检索性 / 文件完备性 / 格式完整性 / 边界控制，边界为硬门槛）
  * ============================================================ */
-var pubState = { extracted: false, price: 0 };
+var pubState = {
+  mode: 'chat',          // chat | upload
+  msgs: [],              // [{role:'user'|'bot', text}]
+  progress: 0,
+  extracted: [],         // 逐轮累计的决策槽 [{key,title,content,source}]
+  versionId: null,
+  skillId: null,
+  chatBusy: false
+};
 function viewPublish() {
   return '<div class="view">' +
     '<div class="page-head"><h1>🎙️ 我要沉淀 · 10 分钟，只确认，不撰写</h1>' +
-    '<p>AI 问、你说 → 自动抽取四槽成卡 → 每个字段必须对得上口述原文，对不上就丢弃 · 口述全文保留为「TA 的完整故事」</p></div>' +
-    '<div class="mentor-grid grid-2">' +
-    '<div class="card speech">' +
-    '<h3 style="font-size:15px;font-weight:900;margin-bottom:8px">你的口述（示例：阿蓝学姐的实验室旁听经历）</h3>' +
-    '<textarea id="mentor-text">' + esc(DB.mentorSample) + '</textarea>' +
-    '<div class="actions"><button class="btn-main" id="btn-extract">🤖 AI 抽取四槽（接入点：WowAPI.extractSlots）</button></div>' +
-    '<div class="n-note">真实版本：AI 语音访谈逐题引导，此处用文本框代替。"不适合谁"为发布硬门槛——抽不出来就无法发布。</div>' +
-    '</div>' +
-    '<div><div class="slots" id="slots">' +
-    ['触发处境（适合谁）', '两周剧本', '判断点（当年在哪一步差点放弃）', '不适合谁（发布硬门槛）', '当时的感受（故事层整体保留）']
-      .map(function (t, i) {
-        return '<div class="slot" data-slot="' + i + '"><div class="s-t">' + t + '</div><div class="s-c">——</div></div>';
-      }).join('') +
-    '</div>' +
-    '<div class="card flat" style="margin-top:14px">' +
-    '<div class="sec-t">定价（免费也能积累声望；定价后每次兑换你获得 80%）</div>' +
-    '<div class="price-set" id="price-set">' +
-    '<button class="chip-btn picked" data-price="0">免费</button>' +
-    '<button class="chip-btn" data-price="15">🪙 15</button>' +
-    '<button class="chip-btn" data-price="30">🪙 30</button></div>' +
-    '<div class="actions"><button class="btn-main" id="btn-publish" disabled>📮 确认发布（你只点这一下）</button></div>' +
-    '<p class="n-note" id="publish-note" style="display:none">✅ 已入池。口述全文脱敏后保留为「TA 的完整故事」——下一个学弟打开这张卡时，能看到你当年改了十一遍邮件的样子。</p>' +
-    '</div></div></div></div>';
+    '<p>两种方式把经验变成卡：<b>多轮访谈</b>（AI 逐题问、你讲，关键判断必须对得上原话，对不上就丢弃）或 <b>上传 Skill 包</b>（每次上传都跑 LLM 四维评测，边界是硬门槛）</p></div>' +
+    '<div class="pub-tabs">' +
+    '<button class="pub-tab active" data-pubmode="chat">🎙️ 多轮访谈</button>' +
+    '<button class="pub-tab" data-pubmode="upload">📦 上传 Skill 包</button></div>' +
+    '<div id="pub-pane-chat" class="pub-pane">' + publishChatPane() + '</div>' +
+    '<div id="pub-pane-upload" class="pub-pane" hidden>' + publishUploadPane() + '</div>' +
+    '</div>';
 }
+
+/* 通道 A：访谈面板（消息流 + 进度 + 已抽槽位 + 完成按钮） */
+function publishChatPane() {
+  var progress = pubState.progress;
+  return '<div class="card speech">' +
+    '<div class="sed-progress"><div class="sed-progress-label">沉淀进度 <b>' + progress + '%</b> · 每次回复末尾自动抽取槽位</div>' +
+    '<div class="sed-bar"><div class="sed-bar-fill" id="sed-bar" style="width:' + progress + '%"></div></div></div>' +
+    '<div class="sed-thread" id="sed-thread"></div>' +
+    '<div class="chat-row"><input id="sed-input" placeholder="讲讲你做成过的那件事…（例：大三保研，我差点放弃但扛下来了）"><button class="btn-main btn-sm" id="btn-sed-send">发送</button></div>' +
+    '<div class="n-note">AI 一次只问 1–2 题，你只管说。说完点「完成沉淀」，关键判断必须能在你的原话里找到依据，找不到就丢弃。</div>' +
+    '<div class="slots" id="sed-slots"></div>' +
+    '<div class="actions"><button class="btn-main" id="btn-sed-finish">🤖 完成沉淀（AI 提取四槽成草稿）</button></div>' +
+    '<p class="n-note" id="sed-done" style="display:none">✅ 草稿已生成，口述全文保留为「TA 的完整故事」。可去工作台继续编辑定价、走发布门禁。</p>' +
+    '</div>';
+}
+
+/* 通道 B：上传面板（zip + 元数据 + 四维评测卡） */
+function publishUploadPane() {
+  return '<div class="grid-2">' +
+    '<div class="card speech">' +
+    '<h3 style="font-size:15px;font-weight:900;margin-bottom:8px">📦 Skill 包（.zip，内含 SKILL.md）</h3>' +
+    '<label>Skill 名称（要独特、可检索）<input id="sed-name" placeholder="例：给实验室发旁听邮件（附原信）"></label>' +
+    '<label>一句话描述（帮谁解决什么问题、产出什么）<textarea id="sed-desc" rows="2" placeholder="例：帮大二学生用一封邮件进组旁听，产出可直接改写的邮件模板"></textarea></label>' +
+    '<label>标签（逗号分隔，覆盖用户会搜的词）<input id="sed-tags" placeholder="例：实验室,旁听,邮件,保研"></label>' +
+    '<input type="file" id="sed-file" accept=".zip" class="sed-file">' +
+    '<div class="actions"><button class="btn-main" id="btn-sed-upload">📦 上传并评测（LLM 四维）</button></div>' +
+    '<div class="n-note">每次上传都会跑一遍 LLM 评测：<b>可检索性 / 文件完备性 / 格式完整性 / 边界控制</b>。边界（不适用条件 + 交回给人触发点）是硬门槛，不过整体 fail。</div>' +
+    '</div>' +
+    '<div id="sed-eval"><div class="card flat"><div class="sec-t">评测结果（上传后显示）</div>' +
+    '<div class="n-note">四维各自打分 pass/fail；边界 fail 则整体 fail，无论其他维度多好。</div></div></div>' +
+    '</div>';
+}
+
+/* 渲染四维评测卡（labels 由后端返回，边界维度标硬门槛） */
+function renderEvalCard(root, ev) {
+  ev = ev || {};
+  var dims = ev.dimensions || [];
+  var labels = ev.labels || ['可检索性', '文件完备性', '格式完整性', '边界控制'];
+  var hard = ev.hard_gate || 'boundary';
+  var rows = dims.map(function (d, i) {
+    var pass = d.verdict === 'pass';
+    var hardTag = d.key === hard ? ' <span class="eval-hard">硬门槛</span>' : '';
+    var issues = (d.issues || []).length
+      ? '<ul class="eval-issues">' + d.issues.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>'
+      : '<div class="eval-none">未发现问题</div>';
+    return '<div class="eval-dim ' + (pass ? 'ok' : 'bad') + '">' +
+      '<div class="eval-dim-h"><b>' + esc(labels[i] || d.key) + '</b>' + hardTag +
+      '<span class="eval-v">' + (pass ? '✅ 通过' : '❌ 未过') + '</span>' +
+      '<span class="eval-score">' + Math.round((d.score || 0) * 100) + '/100</span></div>' +
+      issues +
+      (d.suggestion && d.suggestion !== '无' ? '<div class="eval-sug">💡 ' + esc(d.suggestion) + '</div>' : '') +
+      '</div>';
+  }).join('');
+  var pass = ev.overall_verdict === 'pass';
+  var box = '<div class="eval-summary ' + (pass ? 'ok' : 'bad') + '">' +
+    '<b>' + (pass ? '✅ 总体通过 · 进入发布门禁' : '❌ 总体未过 · 按 issues 修复后重新上传') + '</b>' +
+    '<span>（' + Math.round((ev.overall_score || 0) * 100) + '/100' + (ev.degraded ? ' · 降级评测' : '') + '）</span></div>';
+  $('#sed-eval', root).innerHTML = '<div class="eval-card">' + box + rows +
+    (ev.summary ? '<div class="eval-note">' + esc(ev.summary) + '</div>' : '') + '</div>';
+}
+
+/* 消息流渲染 */
+function paintSedThread(root, thinking) {
+  var thread = $('#sed-thread', root);
+  var msgs = pubState.msgs.slice();
+  if (thinking) msgs.push({ role: 'bot', thinking: true });
+  thread.innerHTML = msgs.map(function (m) {
+    if (m.thinking) return '<div class="msg bot"><div class="bubble thinking">在听…</div></div>';
+    if (m.role === 'user') return '<div class="msg me"><div class="bubble">' + nl2br(m.text) + '</div></div>';
+    return '<div class="msg bot"><div class="bubble">' + nl2br(m.text) + '</div></div>';
+  }).join('');
+  thread.scrollTop = thread.scrollHeight;
+  var bar = $('#sed-bar', root);
+  if (bar) bar.style.width = pubState.progress + '%';
+  var label = $('.sed-progress-label b', root);
+  if (label) label.textContent = pubState.progress + '%';
+}
+
+/* 槽位渲染：pubState.extracted（逐轮累计）或收尾返回的 slots */
+function paintSedSlots(root, list, note) {
+  var wrap = $('#sed-slots', root);
+  if (!list || !list.length) {
+    wrap.innerHTML = '<div class="slot" style="opacity:1"><div class="s-c">' +
+      (note ? esc(note) : '正在逐轮抽取…AI 会从你的话里挖关键判断（触发信号 → 判断 → 适用范围）') + '</div></div>';
+    return;
+  }
+  wrap.innerHTML = list.map(function (s) {
+    return '<div class="slot filled"><div class="s-t">' + esc(s.title || s.key || '') + '</div>' +
+      '<div class="s-c">' + nl2br(s.content || '') +
+      (s.source ? '<br><span style="font-size:11px;color:var(--ink-3)">来源：<span class="src-mark">' + esc(s.source) + '</span></span>' : '') +
+      '</div></div>';
+  }).join('');
+}
+
+/* 逐轮累计：把后端每轮【抽取】的 decisions 并入已有槽位（按 触发信号+判断 去重） */
+function mergeExtracted(existing, ext) {
+  if (!ext) return existing;
+  var list = existing.slice();
+  var seen = {};
+  list.forEach(function (s) { if (s.key) seen[s.key] = true; });
+  var decisions = ext.decisions || [];
+  decisions.forEach(function (d) {
+    var key = d.slot || d.key || '';
+    if (seen[key]) return;
+    if (!d.trigger_signal && !d.judgment) return;
+    seen[key] = true;
+    list.push({
+      key: key,
+      title: d.slot || key,
+      content: (d.trigger_signal || '') + ' → ' + (d.judgment || '') + '（' + (d.scope || '') + '）',
+      source: '口述原话'
+    });
+  });
+  return list;
+}
+
 function bindPublish(root) {
-  pubState = { extracted: false, price: 0 };
-  $all('#price-set .chip-btn', root).forEach(function (b) {
-    b.addEventListener('click', function () {
-      $all('#price-set .chip-btn', root).forEach(function (x) { x.classList.remove('picked'); });
-      b.classList.add('picked');
-      pubState.price = +b.getAttribute('data-price');
+  pubState = { mode: 'chat', msgs: [], progress: 0, extracted: [], versionId: null, skillId: null, chatBusy: false };
+  paintSedThread(root, false);
+  paintSedSlots(root, null, 'AI 将逐题引导：先讲那件事 → 做成什么样 → 哪一步差点放弃 → 适合谁 / 不适用条件。');
+
+  /* 双通道 Tab */
+  $all('.pub-tab', root).forEach(function (t) {
+    t.addEventListener('click', function () {
+      $all('.pub-tab', root).forEach(function (x) { x.classList.remove('active'); });
+      t.classList.add('active');
+      pubState.mode = t.getAttribute('data-pubmode');
+      $('#pub-pane-chat', root).hidden = pubState.mode !== 'chat';
+      $('#pub-pane-upload', root).hidden = pubState.mode !== 'upload';
     });
   });
-  $('#btn-extract', root).addEventListener('click', function () {
-    var btn = this;
-    btn.disabled = true; btn.style.opacity = '.5'; btn.textContent = '🤖 抽取中…（每个字段都在比对口述原文）';
-    WowAPI.extractSlots($('#mentor-text', root).value).then(function (res) {
-      var slots = $all('#slots .slot', root);
-      var list = res.slots || [];
-      if (res.note) toast(res.note);
-      list.forEach(function (s, i) {
-        setTimeout(function () {
-          var el = slots[i]; el.classList.add('filled');
-          el.querySelector('.s-c').innerHTML = nl2br(s.content) +
-            '<br><span style="font-size:11px;color:var(--ink-3)">来源：<span class="src-mark">' + esc(s.source) + '</span></span>';
-          if (i === list.length - 1) {
-            btn.textContent = '✅ 抽取完成 · 5/5 字段全部可溯源';
-            var p = $('#btn-publish', root); p.disabled = false;
-            pubState.extracted = true;
-          }
-        }, 300 + i * 550);
-      });
+
+  /* 通道 A：发送 */
+  function send() {
+    var input = $('#sed-input', root);
+    var text = (input.value || '').trim();
+    if (!text || pubState.chatBusy) return;
+    input.value = '';
+    pubState.msgs.push({ role: 'user', text: text });
+    pubState.chatBusy = true;
+    $('#btn-sed-send', root).disabled = true;
+    paintSedThread(root, true);
+    WowAPI.sedimentChat(pubState.msgs).then(function (res) {
+      pubState.msgs.push({ role: 'bot', text: res.reply || '' });
+      pubState.progress = Math.max(pubState.progress, res.progress || 0);
+      pubState.extracted = mergeExtracted(pubState.extracted, res.extracted);
+      paintSedThread(root, false);
+      paintSedSlots(root, pubState.extracted);
+      if (res.degraded) toast('AI 暂不可用，当前为本地兜底引导');
     }).catch(function (err) {
-      btn.disabled = false; btn.style.opacity = '1'; btn.textContent = '🤖 AI 抽取四槽';
-      toast(err.message || '抽取失败');
+      if (err && err.needLogin) { location.hash = '#/login'; return; }
+      toast(err.message || '发送失败');
+      paintSedThread(root, false);
+    }).then(function () {
+      pubState.chatBusy = false;
+      var b = $('#btn-sed-send', root);
+      if (b) b.disabled = false;
+    });
+  }
+  $('#btn-sed-send', root).addEventListener('click', send);
+  $('#sed-input', root).addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+
+  /* 通道 A：完成沉淀 → sedimentFinish（LLM 提取 + 无来源即丢弃 + runBackfill 落库） */
+  $('#btn-sed-finish', root).addEventListener('click', function () {
+    var btn = this;
+    if (pubState.chatBusy) return toast('等 AI 回完这一轮再收尾');
+    btn.disabled = true; btn.textContent = '🤖 正在整理成草稿…（每个判断都在比对你的原话）';
+    WowAPI.sedimentFinish(pubState.msgs).then(function (res) {
+      pubState.versionId = res.versionId;
+      pubState.skillId = res.skillId;
+      paintSedSlots(root, res.slots || []);
+      btn.textContent = '✅ 草稿已生成';
+      var note = $('#sed-done', root);
+      if (note) {
+        note.style.display = 'block';
+        note.textContent = '✅ 草稿已生成（' + (res.versionId || '') + '），关键判断全部可溯源。可去工作台继续编辑定价、走发布门禁。';
+      }
+      if (res.note) toast(res.note);
+      toast('🎉 草稿已生成 · 口述全文保留为「TA 的完整故事」', true);
+    }).catch(function (err) {
+      if (err && err.needLogin) { location.hash = '#/login'; return; }
+      btn.disabled = false; btn.textContent = '🤖 完成沉淀（AI 提取四槽成草稿）';
+      toast(err.message || '整理失败');
     });
   });
-  $('#btn-publish', root).addEventListener('click', function () {
-    if (!pubState.extracted) return;
-    this.disabled = true; this.textContent = '📮 已发布';
-    $('#publish-note', root).style.display = 'block';
-    State.poolCount++;
-    State.published.push({ title: '给实验室发一封旁听邮件（附原信）', price: pubState.price });
-    DB.user.ledger.unshift({ date: '刚刚', item: '发布 Skill「实验室旁听邮件」' + (pubState.price ? '（定价 🪙' + pubState.price + '）' : '（免费）'), delta: 0 });
-    syncTopbar(); confetti();
-    toast('🎉 已入池 · 你全程只说了 10 分钟话、点了 1 次确认', true);
+
+  /* 通道 B：上传 + LLM 四维评测 */
+  $('#btn-sed-upload', root).addEventListener('click', function () {
+    var btn = this;
+    var file = $('#sed-file', root).files[0];
+    var name = $('#sed-name', root).value.trim();
+    var desc = $('#sed-desc', root).value.trim();
+    var tags = $('#sed-tags', root).value.trim();
+    if (!file) return toast('请先选择 .zip 的 Skill 包');
+    if (!name) return toast('请填写 Skill 名称');
+    if (!/\.zip$/i.test(file.name)) return toast('只接受 .zip 格式的 Skill 包');
+    var fd = new FormData();
+    fd.append('archive', file);
+    fd.append('name', name);
+    if (desc) fd.append('description', desc);
+    if (tags) fd.append('tags', JSON.stringify(tags.split(/[,，、\s]+/).filter(Boolean)));
+    btn.disabled = true; btn.textContent = '🔍 上传并评测中（LLM 四维）…';
+    $('#sed-eval', root).innerHTML = '<div class="card flat"><div class="sec-t">评测中</div>' +
+      '<div class="n-note">正在扫描包内文件 + 跑 LLM 四维评测：可检索性 / 文件完备性 / 格式完整性 / 边界控制…</div></div>';
+    WowAPI.sedimentUpload(fd).then(function (r) {
+      pubState.skillId = r.skill_id;
+      renderEvalCard(root, r.eval || {});
+      btn.disabled = false; btn.textContent = '📦 上传并评测（LLM 四维）';
+      toast('评测完成', true);
+    }).catch(function (err) {
+      if (err && err.needLogin) { location.hash = '#/login'; return; }
+      btn.disabled = false; btn.textContent = '📦 上传并评测（LLM 四维）';
+      $('#sed-eval', root).innerHTML = '<div class="card flat"><div class="sec-t">上传失败</div>' +
+        '<div class="n-note">' + esc(err.message || '请检查 zip 是否包含 SKILL.md') + '</div></div>';
+      toast(err.message || '上传失败');
+    });
   });
 }
 
