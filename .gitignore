@@ -1,0 +1,21 @@
+# 依赖与构建产物
+node_modules/
+dist/
+*.exe
+*.exe~
+*.log
+
+# 本地数据目录（仓库自带 data/skillhub.db 需要上传，这里不排除 *.db）
+data/*.tmp
+
+# 环境与编辑器
+*.local
+.env
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# Python
+__pycache__/
+*.pyc

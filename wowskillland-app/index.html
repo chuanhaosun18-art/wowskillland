@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#5b5bd6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>WowSkillLand</title>
+<link rel="stylesheet" href="css/app.css?v=19">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="logo" href="#/home">
+    <span class="wow">Wow</span><span class="rest">SkillLand</span>
+  </a>
+  <nav class="mainnav desktop-nav" id="mainnav">
+    <a href="#/home" data-nav="home">首页</a>
+    <a href="#/paths" data-nav="paths">路口</a>
+    <a href="#/wishes" data-nav="wishes">许愿池</a>
+    <a href="#/market" data-nav="market">市场</a>
+    <a href="#/run" data-nav="run">进行中</a>
+    <a href="#/publish" data-nav="publish">沉淀</a>
+    <a href="#/me" data-nav="me">我的</a>
+  </nav>
+  <div class="pool">
+    <span class="chip live" id="live-chip" hidden>在线</span>
+    <span class="chip hide-sm">🃏 <b id="pool-count">--</b></span>
+    <span class="chip coin hide-sm">🪙 <b id="coin-count">--</b></span>
+    <span class="chip" id="ui-ver" style="font-weight:900;color:var(--ink)">UI v19</span>
+    <span id="auth-slot"></span>
+  </div>
+</header>
+
+<main class="stage" id="view"></main>
+
+<nav class="tabbar" id="tabbar">
+  <a href="#/home" data-nav="home"><i>⌂</i>首页</a>
+  <a href="#/paths" data-nav="paths"><i>岔</i>路口</a>
+  <a href="#/wishes" data-nav="wishes"><i>愿</i>许愿</a>
+  <a href="#/market" data-nav="market"><i>🃏</i>市场</a>
+  <a href="#/run" data-nav="run"><i>⚡</i>进行中</a>
+  <a href="#/me" data-nav="me"><i>我</i>我的</a>
+</nav>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+<div class="overlay" id="modal-overlay"><div class="modal" id="modal-box"></div></div>
+
+<footer class="footer hide-sm">
+  WowSkillLand · 不测评 · 不建议 · 不承诺
+</footer>
+
+<script src="js/data.js?v=18"></script>
+<script src="js/real_skills.js?v=18"></script>
+<script src="js/api.js?v=18"></script>
+<script src="js/app.js?v=18"></script>
+</body>
+</html>

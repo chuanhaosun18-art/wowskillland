@@ -1,0 +1,4 @@
+interface:
+  display_name: "BJTU Thesis Autowriter"
+  short_description: "BJTU LaTeX-template-based thesis autowriter with DOCX/PDF outputs"
+  default_prompt: "Use $bjtu-thesis-autowriter with my project repository, thesis title, and project background to draft a BJTU thesis based on the school LaTeX template and generate PDF/DOCX outputs."

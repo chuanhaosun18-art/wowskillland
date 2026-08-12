@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>产品设计：迷茫期路由器（工程可开工版）</title>
+<style>
+  :root {
+    --text-1: #1a1a1a;
+    --text-2: #4a4a4a;
+    --text-3: #8a8a8a;
+    --bg: #ffffff;
+    --bg-soft: #f7f7f5;
+    --stroke: #e4e4e0;
+    --accent: #2f6fed;
+    --success: #1a7f4b;
+    --success-bg: #eef7f1;
+    --warning: #9a6700;
+    --warning-bg: #fdf6e7;
+    --info: #2f6fed;
+    --info-bg: #eef3fd;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    color: var(--text-1);
+    background: var(--bg);
+    line-height: 1.75;
+  }
+  .page { max-width: 920px; margin: 0 auto; padding: 48px 28px 80px; }
+  h1 { font-size: 26px; line-height: 1.4; margin: 0 0 8px; }
+  h2 { font-size: 19px; margin: 44px 0 12px; padding-top: 20px; border-top: 1px solid var(--stroke); }
+  h3 { font-size: 15px; margin: 20px 0 8px; }
+  p { margin: 8px 0; color: var(--text-2); font-size: 14.5px; }
+  .lead { font-size: 15px; color: var(--text-2); }
+  .muted { color: var(--text-3); font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { border: 1px solid var(--stroke); padding: 9px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--bg-soft); font-weight: 600; white-space: nowrap; }
+  td { color: var(--text-2); }
+  tr.hl-success td { background: var(--success-bg); }
+  tr.hl-warning td { background: var(--warning-bg); }
+  tr.hl-info td { background: var(--info-bg); }
+  .callout { border: 1px solid var(--stroke); border-left: 3px solid var(--accent); background: var(--bg-soft); padding: 14px 18px; border-radius: 6px; margin: 16px 0; }
+  .callout.success { border-left-color: var(--success); background: var(--success-bg); }
+  .callout.warning { border-left-color: var(--warning); background: var(--warning-bg); }
+  .callout .title { font-weight: 600; font-size: 14px; margin-bottom: 4px; color: var(--text-1); }
+  .callout p { font-size: 13.5px; margin: 4px 0; }
+  .screen { border: 1px solid var(--stroke); border-radius: 8px; margin: 12px 0; overflow: hidden; }
+  .screen-head { display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; background: var(--bg-soft); border-bottom: 1px solid var(--stroke); font-size: 13px; font-weight: 600; }
+  .screen-head .tag { font-weight: 500; font-size: 12px; color: var(--text-3); border: 1px solid var(--stroke); border-radius: 99px; padding: 1px 10px; background: var(--bg); }
+  .screen-body { padding: 12px 18px; }
+  ul { margin: 6px 0; padding-left: 20px; }
+  li { margin: 6px 0; color: var(--text-2); font-size: 13.5px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 14px 0; }
+  .stat { border: 1px solid var(--stroke); border-radius: 8px; padding: 14px 16px; }
+  .stat .v { font-size: 22px; font-weight: 700; }
+  .stat .v.info { color: var(--info); }
+  .stat .v.success { color: var(--success); }
+  .stat .l { font-size: 12.5px; color: var(--text-3); margin-top: 2px; line-height: 1.5; }
+  .footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--stroke); font-size: 12px; color: var(--text-3); }
+  @media print {
+    .page { padding: 0; }
+    h2 { break-after: avoid; }
+    .screen, .callout, table { break-inside: avoid; }
+  }
+  @media (max-width: 640px) {
+    .stats { grid-template-columns: 1fr; }
+    table { display: block; overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>产品设计：迷茫期路由器（工程可开工版）</h1>
+<p class="lead">一个入口、三个流、一份地图、一个供给端。建议产品名「路口」（备选「走过」），一句话定位：<strong>每一次"我不知道"，都有人真走过。</strong>三条产品纪律贯穿全部界面：不测评、不建议、不承诺。</p>
+
+<div class="callout success">
+  <div class="title">供给的三层结构：我们做的是"能行动的经验贴"</div>
+  <p>好的经验贴从不靠给答案解决迷茫——它让人在别人的故事里认出自己，顿悟发生在读者脑子里。因此供给分三层，缺一不可：<strong>故事层</strong>（学长口述全文，共鸣的载体，挂在卡背后可下钻）、<strong>卡片层</strong>（抽出的可执行第一步，补经验贴"读完不知道明天干嘛"的缺陷）、<strong>分布层</strong>（分叉数据与失败恢复卡，补单篇经验贴样本=1 和幸存者偏差的缺陷）。匹配的不是"最佳答案"，而是"处境和你最像的人的完整经历"——推荐理由直接写在界面上："TA 当年也是二本转码、也是大二下才开始慌的。"</p>
+</div>
+
+<h2>六个界面（按用户旅程排列）</h2>
+
+<div class="screen">
+  <div class="screen-head">S1 · 入口对话（唯一入口）<span class="tag">路由器</span></div>
+  <div class="screen-body"><ul>
+    <li>只有一个输入框："说说你现在的不知道"。用户一句话进来，路由器判定迷茫形态：探索型 / 抉择型 / 行动型 / 情绪类（拦截，给校内心理支持入口，不落任何记录）。</li>
+    <li>判定结果必须明示："听起来你还没想清楚要什么——我们先不聊选择，先找几件值得试的小事。" 路由透明本身是信任的一部分，也是兜底：判错了用户可以一键改道。</li>
+  </ul></div>
+</div>
+
+<div class="screen">
+  <div class="screen-head">S2 · 探索流：访谈 → 假设 → 选卡<span class="tag">探索型出口</span></div>
+  <div class="screen-body"><ul>
+    <li>轻访谈 ≤5 轮、每轮 1–2 问，只采处境与行为信号（高中为什么熬过夜 / 每周自由时间 / 硬约束），不做任何人格测评。</li>
+    <li>产出 3 张方向假设卡，每张必须引用访谈原话作为依据（"你说竞赛熬夜是高中最爽的时刻→技术深水区值得一试"），下挂 1–2 张匹配的第一步卡。</li>
+    <li>第一步卡展示：两周剧本、完成标准、学长判断点、不适合谁、同处境验证数（9/11 说成立）、去向分布、choose_if 一句话。</li>
+    <li>每张卡可下钻"TA 的完整故事"：学长口述全文——当年的处境原话、纠结、决定、后来。故事层负责共鸣，卡片层负责行动，推荐理由明示处境相似点。</li>
+  </ul></div>
+</div>
+
+<div class="screen">
+  <div class="screen-head">S3 · 微尝试进行中（Skill 的运行时）<span class="tag">任务态薄版</span></div>
+  <div class="screen-body"><ul>
+    <li><strong>选卡即装载</strong>：卡的剧本、判断点、边界、学长原材料被挂进用户专属陪跑 Agent（工程上=编译成 SKILL.md 挂给会话，与 Claude/扣子 Skill 机制同构）。AI 从通用聊天变成"带着这位学长经验的陪跑者"。</li>
+    <li><strong>执行中四种调用时刻</strong>：① 参数化展开——剧本 + 你的课表 → 本周具体安排（"你周三下午没课，建议周三写周四早上发，学长说早上发回复率高"）；② 执行中求助——用学长当年的原信生成你的版本，产出物里流着学长经验的血；③ 判断点定时触发——第 3 天你犹豫时，学长当年的想法主动递到你面前；④ 边界停机——处境越界（"我每周只剩 2 小时了"）时卡主动喊停"这张卡不适用了"。</li>
+    <li><strong>多卡可组合同载</strong>：方向探索卡 + 同专业时间模板卡，排周计划时两张卡约束同时生效——"组合不同人的经验"在此发生，用户无需任何编排操作。</li>
+    <li>结束（或中途放弃）时只问两个问题：哪个时刻你忘了时间？哪个时刻你想逃？外加一句 verdict：这张卡在你的情况下成立吗（成立 / 不成立 + 一句反例）。放弃不是失败：原因同样落地图、给卡片积累边界数据。</li>
+    <li><strong>一句话区别</strong>：帖子只能被读，Skill 被执行——它把学长的剧本参数化到你的课表里，用学长的原材料帮你产出你的版本，在你最容易放弃的那天把学长的判断递到你面前，并且在自己不适用的时候主动喊停。</li>
+  </ul></div>
+</div>
+
+<div class="screen">
+  <div class="screen-head">S4 · 探索地图（个人页）<span class="tag">自我认知的载体</span></div>
+  <div class="screen-body"><ul>
+    <li>时间轴叙事：什么时候带着什么迷茫来过、试了什么、感受原话是什么、下一步试什么。AI 生成叙事段落，原始记录可下钻。</li>
+    <li>硬约束：禁止评价性词汇（优秀 / 擅长 / 适合），只允许描述行为与引用本人原话。无分数、无雷达图、无标签——这一页就是对评委"不量化人"的直接回答。</li>
+  </ul></div>
+</div>
+
+<div class="screen">
+  <div class="screen-head">S5 · 路口页<span class="tag">抉择型出口</span></div>
+  <div class="screen-body"><ul>
+    <li>输入"该保研还是就业"类问题后展示：走过这个路口的总人数、各去向的绝对人数、改道最常发生的节点、每一支的代价原话（学长一句话）。</li>
+    <li>页面顶部固定一行："我们不替你选，只让你看见走过的人。" 全页无建议、无倾向排序、无百分比。</li>
+  </ul></div>
+</div>
+
+<div class="screen">
+  <div class="screen-head">S6 · 学长录入端<span class="tag">供给闭环</span></div>
+  <div class="screen-body"><ul>
+    <li>10 分钟访谈式录入：AI 问、学长说，自动抽取四槽（触发处境 / 两周剧本 / 判断点 / 不适合谁）+ 当时的感受，学长只确认不撰写。</li>
+    <li>每个字段必须对应口述原文，对不上的丢弃（沿用"无来源即丢弃"）。"不适合谁"留空则不能发布。</li>
+    <li>口述全文整理后保留为故事层内容（学长确认脱敏后发布）——它不只是溯源凭证，本身就是产品的第一等供给。</li>
+  </ul></div>
+</div>
+
+<div class="callout">
+  <div class="title">编排态的处理</div>
+  <p>行动型迷茫（"我决定考研了怎么排"）在决赛版本里不做完整交互：路由器识别后展示一份预生成的编排示例并口述机制。它是 PRD F17 的存量能力，答辩讲"产品长大后的样子"时再展开，不占开发时间。</p>
+</div>
+
+<h2>Skill 运行时与被动供给（飞轮）</h2>
+
+<h3>Skill 包格式（纯文本 + 提示词，48h 可实现）</h3>
+<ul>
+  <li><strong>instructions（提示词段）</strong>：学长经验转成的行为约束——判断点怎么提醒、什么信号说什么话。直接注入陪跑 Agent 上下文。</li>
+  <li><strong>resources（文本资产段）</strong>：学长原信、模板、清单、当年的周安排——执行时的原材料。</li>
+  <li><strong>triggers &amp; boundary（触发与边界段）</strong>：时间触发（"第 3 天"）、语义触发（用户说"不想去了"）、停机条件（处境越界）。</li>
+</ul>
+
+<h3>运行时架构</h3>
+<ul>
+  <li>一个基础陪跑 Agent（通用能力 + "不测评不建议不承诺"纪律 system prompt），Skill 是动态挂载进它上下文的能力包。每轮循环：用户消息 → 规则检查在载 Skill 的触发条件 → 命中才注入对应段落 → Agent 融合生成回复。工程上是结构化 prompt 片段的条件注入，无黑科技，但演示效果是"AI 的行为肉眼可见地被学长经验改变"。</li>
+  <li>两种运行形态：<strong>陪跑态</strong>（装载后持续生效两周，判断点定时触发、边界持续监控）与<strong>即时态</strong>（一次性调用"用学长模板写这封邮件"→ 单次产物）。同一个包，两种消费方式。</li>
+</ul>
+
+<h3>被动供给三级阶梯（用户只确认，不撰写）</h3>
+<table>
+  <tr><th>层级</th><th>触发方式</th><th>用户动作</th><th>产出</th></tr>
+  <tr><td>验证级</td><td>每次尝试结束自动发生</td><td>回答两问 + 一句 verdict</td><td>卡片的验证数与边界数据——用了就是贡献了</td></tr>
+  <tr class="hl-info"><td>变体级</td><td>Agent 检测到实际走法偏离原卡剧本</td><td>对 AI 生成的变体草稿点一次确认</td><td>变体卡入池，署名归用户</td></tr>
+  <tr class="hl-success"><td>新卡级</td><td>用户走通许愿池里的无人区方向</td><td>确认 AI 从轨迹蒸馏的新卡草稿 + 故事层</td><td>他成为下一届的"学长"——产品主张的字面闭环</td></tr>
+</table>
+<div class="callout success">
+  <div class="title">这同时回答了评委必问的供给续命问题</div>
+  <p>冷启动的 30–40 张卡用完之后，供给从哪来？——不靠邀请学长做慈善，靠使用本身的副产品：越多人用，验证越厚、变体越多、卡越准，飞轮成立。Demo 幕三结尾加一步：打卡完成后弹出 AI 蒸馏好的变体草稿，演示者一键确认发布——"消费者变供给者只花一次点击"，这个画面比任何飞轮图都有说服力。</p>
+</div>
+
+<h2>数据模型（8 张表跑通全场）</h2>
+<table>
+  <tr><th>表</th><th>关键字段</th><th>说明</th></tr>
+  <tr><td>users</td><td>id, grade, major, weekly_hours</td><td>处境字段直接放用户表，匹配用</td></tr>
+  <tr><td>moments</td><td>raw_text, routed_state, created_at</td><td>每一次"我不知道"都是一条记录——留存论证的数据基础</td></tr>
+  <tr><td>interviews</td><td>moment_id, context(jsonb), turns</td><td>访谈快照，缺必采字段不产出假设</td></tr>
+  <tr><td>hypotheses</td><td>moment_id, label, evidence_quote</td><td>方向假设，evidence_quote 必须是访谈原话</td></tr>
+  <tr><td>cards</td><td>trigger_context, script, done_criteria, decision_points, boundary, feeling, creator_id, source_transcript, variant_of_card_id</td><td>第一步卡=Skill 包。boundary 为空不能发布；每字段可溯源到口述；source_transcript 即故事层内容；variant_of 记录变体谱系</td></tr>
+  <tr><td>attempts</td><td>card_id, user_id, status, flow_moments, escape_moments, verdict, counter_example</td><td>微尝试记录。放弃也是合法终态</td></tr>
+  <tr><td>forks</td><td>junction_label, walked_count, branches(jsonb), switch_node</td><td>路口分叉聚合：只存绝对人数与代价原话</td></tr>
+  <tr><td>wishes</td><td>moment_id, direction_label</td><td>没有匹配卡时的许愿池，反向指导供给</td></tr>
+</table>
+
+<h2>AI 能力清单（6 个任务，每个带硬约束）</h2>
+<table>
+  <tr><th>任务</th><th>做什么</th><th>硬约束（答辩即卖点）</th></tr>
+  <tr><td>A1 路由器</td><td>一句话分类四态</td><td>情绪类立即拦截；判定结果必须明示给用户</td></tr>
+  <tr><td>A2 迷茫访谈</td><td>≤5 轮采集处境与行为信号</td><td>只问经历不问"你觉得自己是什么样的人"；缺必采字段不往下走</td></tr>
+  <tr><td>A3 假设生成</td><td>3 个方向假设</td><td>每个假设必须附访谈原话依据；措辞是"值得一试"不是"你适合"</td></tr>
+  <tr><td>A4 卡片匹配</td><td>规则过滤 + 生成 choose_if</td><td>过滤是规则不是 AI（处境 vs trigger_context/boundary）；AI 只写"选它取决于什么"；无卡时如实说"还没人留下第一步"并落许愿池</td></tr>
+  <tr><td>A5 学长抽取</td><td>口述 → 四槽 + 感受</td><td>每个字段对应口述原文，对不上即丢弃；学长只确认不撰写</td></tr>
+  <tr><td>A6 地图叙事</td><td>attempts → 叙事段落</td><td>禁评价性形容词，只描述行为、引用原话</td></tr>
+</table>
+
+<h2>场景 × Skill 化判定（时期场景先拆解，再决定出口）</h2>
+<p class="muted">总原则：Skill 只承载"下一步动作"，不承载情绪修复和人生答案。每个场景拆成四种成分：可行动内核进卡（完成标准定义在自己的行动上）、认知校准给真实分布、不可控部分显式标注、纯情绪拦截或转介。</p>
+<table>
+  <tr><th>场景</th><th>能进卡的部分（示例）</th><th>给分布的部分</th><th>不可控/情绪的处理</th></tr>
+  <tr><td>大一 · 方向迷茫</td><td>方向微尝试第一步卡（已是主线）</td><td>同处境学长的去向分布</td><td>"兴趣何时出现"不可控；空心感不展开</td></tr>
+  <tr><td>大一 · 社交</td><td>社交动作卡：组织宿舍聚餐的做法、社团面试自我介绍、破冰动作。完成标准="你发起了"</td><td>"多久才有稳定朋友圈"的真实分布（多数人第 8 周后）</td><td>对方是否回应→标注不可控</td></tr>
+  <tr class="hl-warning"><td>大一 · 孤独感</td><td>不做卡。孤独是状态不是任务——主动放弃 Skill 化是答辩加分项</td><td>"同期有同感的比例"数据本身即有安慰力</td><td>陪伴式回应；持续→校内心理入口</td></tr>
+  <tr class="hl-success"><td>大一 · 时间掌控</td><td>最强 Skill 区：同专业课表下的一周模板卡、ddl 急救卡。差异化=处境特异性，不是通用方法论</td><td>学长真实每周有效学习时长分布（校准想象）</td><td>—</td></tr>
+  <tr class="hl-info"><td>大二 · peer pressure</td><td>少量行动卡：调整信息环境、退出比较漩涡的具体做法</td><td>主解药："37 位学长的大二暑假真实去向"——击穿"人均大厂"的失真参照系</td><td>他人节奏不可控；焦虑持续→入口</td></tr>
+  <tr><td>大二 · 专业迷茫</td><td>第一步卡：旁听目标专业课、约转过专业的学长（附邮件模板）</td><td>转专业路口的分叉与代价原话</td><td>转专业名额→标注不可控</td></tr>
+  <tr><td>大三 · 前途分水岭</td><td>决定后的编排（F17）</td><td>主交付：保研/考研/就业/出国路口页</td><td>名额与 offer→标注不可控</td></tr>
+  <tr class="hl-success"><td>大三 · 失败处理</td><td>特色供给：失败恢复卡——"保研失利后 14 天补救时间线""挂科止损 SOP"。来自真正失败过的学长，知乎精华帖里没有，幸存者偏差最低</td><td>"失败之后的人后来怎样了"——最有安慰力的分布</td><td>冲击期先陪伴不推卡；结果不可控</td></tr>
+</table>
+<div class="callout warning">
+  <div class="title">矩阵的正确位置</div>
+  <p>"时期 × 场景"矩阵是内容生产的组织方式（指导学长访谈提纲的覆盖），不是产品导航。不要做"大一专区/大二专区"式的首页——用户入口仍然只有一个输入框，分场景发生在系统内部的路由里，不发生在界面上。</p>
+</div>
+
+<h2>冷启动内容包（非代码，决赛前必须完成）</h2>
+<div class="stats">
+  <div class="stat"><div class="v info">30–40 张</div><div class="l">第一步卡：访谈 15–20 位学长，覆盖 6–8 个方向</div></div>
+  <div class="stat"><div class="v info">2–3 个</div><div class="l">路口分叉：问卷收 30–50 份学长真实去向</div></div>
+  <div class="stat"><div class="v success">≥5 张</div><div class="l">队员自己的卡：Demo 现场的讲述权</div></div>
+</div>
+<ul>
+  <li>卡片覆盖按"时期 × 场景"矩阵组织访谈提纲：方向探索（技术/科研/竞赛/内容/组织/商业）、社交动作、时间掌控（分专业）、专业迷茫的第一步，以及至少 5 张失败恢复卡（保研失利/挂科/竞赛失败后的真实补救时间线）。</li>
+  <li>分叉问卷只收三样：当年在哪个路口、最后走了哪支、如果重来最想告诉学弟的一句话（即代价原话）。</li>
+  <li>访谈要完整保留录音/记录——口述全文是故事层的产品内容而非中间材料，提纲需引导学长讲出"当年的处境、纠结、决定、后来"这条故事线。</li>
+  <li>这个内容包是评委问"数据哪来"时的真实底气："这 37 条分叉是我们两周内访谈和问卷收来的真实数据"——比任何架构图都有说服力。</li>
+</ul>
+
+<h2>48 小时排期（3–5 人）</h2>
+<table>
+  <tr><th>时段</th><th>交付物</th><th>验收</th></tr>
+  <tr><td>0–4h</td><td>schema 落库 + A1 路由 prompt + Demo 脚本定稿</td><td>手工插一条完整旅程能查出来</td></tr>
+  <tr><td>4–12h</td><td>S1 入口 + 路由四态 + S2 访谈到假设（A1/A2/A3）</td><td>情绪类输入被拦截；假设卡带访谈原话</td></tr>
+  <tr><td>12–20h</td><td>卡片库导入 + 规则匹配 + 卡片详情（A4）</td><td>处境不合的卡不出现；无卡方向如实提示</td></tr>
+  <tr><td>20–28h</td><td>S3 打卡两问 verdict + S4 探索地图（A6）</td><td>地图无一个分数或评价词</td></tr>
+  <tr><td>28–34h</td><td>S5 路口页（真实分叉静态数据）</td><td>全页无百分比、无建议</td></tr>
+  <tr><td>34–40h</td><td>S6 学长录入端（A5）</td><td>口述对不上的字段被丢弃；无 boundary 不能发布</td></tr>
+  <tr><td>40–48h</td><td>兜底缓存、双视角预置数据、连排 5 次</td><td>每一幕有兜底，全程 ≤3 分钟</td></tr>
+</table>
+
+<h2>三个关键取舍</h2>
+<ul>
+  <li><strong>两周时间盒无法现场发生</strong> → Demo 用双视角预置数据：评委现场走"第 0 天"（入口到选卡），再切到一个预置的"第 14 天"学生账号看打卡记录和探索地图。时间流不需要现场证明，闭环逻辑需要。</li>
+  <li><strong>路由可能判错</strong> → 不追求分类准确率，追求改道成本为零：判定结果明示 + 一键切换（"其实我已经决定了"）。答辩说法："我们不赌 AI 判得准，我们保证判错了用户一步就能纠正。"</li>
+  <li><strong>分叉样本量小</strong> → 这恰是机制优势而非缺陷：只给绝对人数（"37 人走过"）不给百分比，小样本诚实呈现比大样本包装可信。样本量本身标注在页面上。</li>
+</ul>
+
+<div class="footer">
+  承接文档：WowSkillLand PRD v1.3（机制复用：P7 访谈、F17.4 分叉呈现、无来源即丢弃、三态路由扩展为四态）。设计时间：2026 年 8 月 12 日。
+</div>
+
+</div>
+</body>
+</html>
