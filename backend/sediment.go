@@ -216,8 +216,8 @@ Anthropic 官方规范要点（评测必须对照执行）：
 - body 用命令式（Create/Use/Prefer），≤500 行，说明每一步的 why；长文档拆到 references/（渐进披露，引用只允许一层）。
 - 包内目录：SKILL.md 必在；references/（按需加载的文档）、scripts/（可执行代码）、assets/（模板素材）为可选标准目录。
 
-严格只输出 JSON，不要 markdown 代码块，不要任何多余文字。格式：
-{"dimensions":[{"key":"searchable|complete|format|boundary","score":0.0,"verdict":"pass|fail","issues":["具体问题，必须引用文件名或字段名"],"suggestion":"具体怎么改"}],"summary":"一句话总评"}
+严格只输出 JSON，不要 markdown 代码块，不要任何多余文字。必须且仅输出一个顶层对象，且顶层只能有 dimensions 与 summary 两个键；dimensions 必须是数组，数组内恰好 4 个对象（key 依次为 searchable、complete、format、boundary），严禁把任一维度对象平铺到顶层。完整格式示例：
+{"dimensions":[{"key":"searchable","score":0.9,"verdict":"pass","issues":["name 含大写，应改 kebab-case"],"suggestion":"将 name 改为 lab-visit-mail"},{"key":"complete","score":1.0,"verdict":"pass","issues":["SKILL.md 与 references/template.md 均存在且非空"],"suggestion":""},{"key":"format","score":0.7,"verdict":"pass","issues":["description 被截断"],"suggestion":"补全 description 至完整句子"},{"key":"boundary","score":1.0,"verdict":"pass","issues":["已明确不适用条件与交回给人触发点"],"suggestion":""}],"summary":"一句话总评"}
 
 四维判分标准：
 1. searchable 可检索性：name 为合法 kebab-case 且不泛化；description 为第三人称、说明「帮谁解决什么问题、产出什么、何时触发」、覆盖用户会搜的关键词；tags 覆盖检索词（≥3 个）。frontmatter 缺失或 description 触发不清判 fail。
@@ -252,6 +252,12 @@ func runPackageEval(skillID, verID int64, name, description string) (*packageEva
 	var out packageEvalResult
 	jsonStr := extractJSON(raw)
 	if e := json.Unmarshal([]byte(jsonStr), &out); e != nil {
+		// 兜底1：LLM 偶发把部分维度对象平铺到顶层（如 {"dimensions":[{searchable}],"complete":{...}}），归一化后重试
+		if norm := coalesceEvalJSON(jsonStr); norm != jsonStr {
+			if e2 := json.Unmarshal([]byte(norm), &out); e2 == nil && len(out.Dimensions) > 0 {
+				return &out, false
+			}
+		}
 		if repaired := repairClosingJSON(jsonStr); repaired != jsonStr {
 			if e2 := json.Unmarshal([]byte(repaired), &out); e2 == nil && len(out.Dimensions) > 0 {
 				return &out, false
@@ -261,6 +267,69 @@ func runPackageEval(skillID, verID int64, name, description string) (*packageEva
 		return degradedEval(facts), true
 	}
 	return &out, false
+}
+
+// coalesceEvalJSON 解析兜底：LLM 偶尔把部分维度对象平铺到顶层（如 {"dimensions":[{searchable}],"complete":{...}}），
+// 把它们归一化回 dimensions 数组（补上 key 字段），保证四个维度都在数组内、结构合法。
+func coalesceEvalJSON(jsonStr string) string {
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(jsonStr), &top); err != nil {
+		return jsonStr
+	}
+	dims := []json.RawMessage{}
+	if raw, ok := top["dimensions"]; ok {
+		if err := json.Unmarshal(raw, &dims); err != nil {
+			dims = []json.RawMessage{}
+		}
+	}
+	seen := map[string]bool{}
+	for _, d := range dims {
+		var tmp struct {
+			Key string `json:"key"`
+		}
+		if err := json.Unmarshal(d, &tmp); err == nil && tmp.Key != "" {
+			seen[tmp.Key] = true
+		}
+	}
+	changed := false
+	for _, key := range []string{"searchable", "complete", "format", "boundary"} {
+		if seen[key] {
+			continue
+		}
+		raw, ok := top[key]
+		if !ok {
+			continue
+		}
+		var obj map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &obj); err != nil {
+			continue
+		}
+		_, hasScore := obj["score"]
+		_, hasVerdict := obj["verdict"]
+		if !hasScore && !hasVerdict {
+			continue
+		}
+		obj["key"], _ = json.Marshal(key)
+		if merged, err := json.Marshal(obj); err == nil {
+			dims = append(dims, merged)
+			changed = true
+		}
+	}
+	if !changed {
+		return jsonStr
+	}
+	var b strings.Builder
+	b.WriteString(`{"dimensions":`)
+	dm, _ := json.Marshal(dims)
+	b.Write(dm)
+	b.WriteString(`,"summary":`)
+	if s, ok := top["summary"]; ok {
+		b.Write(s)
+	} else {
+		b.WriteString(`""`)
+	}
+	b.WriteString(`}`)
+	return b.String()
 }
 
 // packageFacts 磁盘确定性事实：SKILL.md 是否存在、锚点区块是否齐全、文件数、空文件
