@@ -608,6 +608,9 @@ func cleanHistory(msgs []chatMsg) []chatMsg {
 	for _, m := range msgs {
 		role := strings.TrimSpace(m.Role)
 		content := strings.TrimSpace(m.Content)
+		if content == "" {
+			content = strings.TrimSpace(m.Text) // 前端沉淀模块发 {role,text}，兼容回退
+		}
 		if role != "user" && role != "assistant" {
 			continue
 		}

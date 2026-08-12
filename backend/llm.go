@@ -118,6 +118,7 @@ func parseAgentState(user *User) (bool, bool) {
 type chatMsg struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
+	Text    string `json:"text"` // 兼容前端沉淀模块发送的 {role,text} 结构
 }
 
 type chatReq struct {
