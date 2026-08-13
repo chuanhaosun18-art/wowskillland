@@ -42,6 +42,13 @@
 ### 6. 其他模块
 - 论坛、通知、Persona 人格、Direct Chat 直聊
 
+### 7. 经验沉淀（双通道 · LLM 驱动）
+把「你做成过的那件事」变成可被检索的 Skill 卡，全程**只确认、不撰写**，关键判断必须对得上原话，对不上就丢弃：
+- **通道 A · 多轮口述访谈**：AI 教练逐题追问（触发处境 → 关键动作 → 差点放弃处 → 适用范围），每轮回复末尾自动抽取槽位；点「完成沉淀」由 LLM 收尾抽取四槽草稿并逐字溯源落库
+- **通道 B · 上传 Skill 包**：每次上传都跑 LLM **四维评测**（searchable 可检索 / complete 完备 / format 格式 / boundary 边界），**boundary 是硬门槛**——不写「不适用条件 + 交回给人触发点」一律 fail
+- **对齐 Anthropic 官方 Agent Skill 规范**：frontmatter（kebab-case name ≤64 / 第三人称触发式 description ≤1024）、body ≤500 行命令式、长文档拆 references/ 渐进披露、五锚点（核心步骤 / 完成标准 / 关键判断 / 失败案例 / 适用边界）
+- **评测容错**：JSON 解析三层兜底（extractJSON → 平铺维度归一化 → 修复闭合括号），LLM 全失败降级为确定性事实评测（degraded=true），绝不 500
+
 ---
 
 ## 改了什么功能
@@ -64,6 +71,10 @@
 2. **前端 Skill 卡片**：discuss 回复渲染 `.skill-mini-card`（类型徽标 + 标题 + 描述），点击跳转 Skill 详情；`be-{id}` 前缀映射缓存进前端 DB 保证详情页可跳
 3. **十字路口全套后端**：moments / interviews / hypotheses / cards / attempts / coach / wishes / forks / map 的 DB 表与路由
 4. 页面收尾流程、收尾问题动态渲染、`ensureExecId` 复用机制
+5. **沉淀双通道**（`sediment_*`）：`POST /api/growth/sediment/chat`（多轮访谈教练）、`POST /api/growth/sediment/finish`（收尾抽取 + 溯源落库）、`POST /api/growth/sediment/upload`（上传即跑四维 LLM 评测）、`GET /api/growth/sediment/evals/:skillID`（评测结果 + 硬门槛状态）；前端 publish 页双 Tab UI（🎙️ 多轮访谈 / 📦 上传 Skill 包）
+6. **四维评测体系**：`evalPackageSystemPrompt` 对齐 Anthropic 官方 Skill 规范（frontmatter / 第三人称 description / body 命令式 / references 渐进披露 / 五锚点），四维判分（searchable / complete / format / boundary），boundary 缺失即整体 fail
+7. **评测 JSON 容错**：`coalesceEvalJSON` 把 LLM 偶发平铺到顶层的维度对象归一化回 `dimensions` 数组，配合 `repairClosingJSON` 两层兜底
+8. **修复沉淀字段不匹配（关键）**：前端发 `{role,text}`，后端 `chatMsg` 只认 `content`，导致 `cleanHistory` 全过滤、多轮访谈永远走固定兜底（degraded=true）——`chatMsg` 增加 `text` 兼容字段，`cleanHistory` 空 content 回退读 text
 
 ---
 
@@ -92,8 +103,8 @@ python3 -m http.server 8010
 
 | 变量 | 用途 | 必填 |
 | --- | --- | --- |
-| `DEEPSEEK_API_KEY` | 意图识别 / 技能解读 / 引导对话 / 成长闭环 | 是 |
-| `DEEPSEEK_GUIDE_API_KEY` | 引导对话专用 key | 否（回退上面） |
+| `DEEPSEEK_API_KEY` | 意图识别 / 技能解读 / 引导对话 / 成长闭环 / 沉淀双通道 | 是 |
+| `DEEPSEEK_GUIDE_API_KEY` | 引导对话 / 沉淀专用 key | 否（回退上面） |
 | `SKILLHUB_PORT` | 后端端口 | 否（默认 8080） |
 | `SKILLHUB_DATA` | 数据存储目录 | 否（默认 `D:\skillhub-data`） |
 
@@ -129,4 +140,8 @@ python3 -m http.server 8010
 | POST | `/api/growth/backfill` | 轨迹补录（蒸馏度封顶 0.85） | 是 |
 | GET | `/api/growth/skills/:id/trust-card` | Trust Card（七分区溯源） | 否 |
 | POST | `/api/growth/orch-probe` | 编排探测（无人走过的方向拒绝生成） | 是 |
+| POST | `/api/growth/sediment/chat` | **多轮访谈教练**（逐题追问 + 槽位抽取） | 是 |
+| POST | `/api/growth/sediment/finish` | **收尾抽取**（LLM 提取四槽草稿 + 溯源落库） | 是 |
+| POST | `/api/growth/sediment/upload` | **上传 Skill 包即跑四维 LLM 评测** | 是 |
+| GET | `/api/growth/sediment/evals/:skillID` | 四维评测结果 + 硬门槛（boundary）状态 | 是 |
 | POST | `/api/crossroad/moments` ... | 十字路口全套 | 是 |
